@@ -4,7 +4,7 @@ import tensorflow as tf
 class Word2VecModel:
     def __init__(self, sess):
         self.sess = sess
-        self.w_id = None
+        self.w_in = None
         self.word2id = {}
 
     def load_model(self, model_file, vocab_file, emb_size):
@@ -24,7 +24,8 @@ class Word2VecModel:
         saver.restore(self.sess, model_file)
 
     def get_embeddings_constant(self):
-        return tf.constant(self.w_id, name='embeddings')
+        w_in_value = self.sess.run(self.w_in)
+        return tf.constant(w_in_value, name='embeddings')
 
     def word2vec(self, word, run=True):
         if word in self.word2id:
@@ -47,6 +48,8 @@ def main():
                      vocab_file='./saved/vocab.txt',
                      emb_size=200)
 
+    model.w_in = model.get_embeddings_constant()
+
     print('Evaluating...')
     igor_vec = model.word2vec('igor')
     two_vec = model.word2vec('two')
@@ -56,7 +59,7 @@ def main():
     num_dst = sess.run(tf.reduce_mean(tf.square(three_vec - two_vec)))
 
     print('igor_dst = \'igor\' - \'two\' = {}'.format(igor_dst))
-    print(r'num_dst = \'three\' - \'two\' = {}'.format(num_dst))
+    print('num_dst = \'three\' - \'two\' = {}'.format(num_dst))
 
 
 if __name__ == "__main__":
