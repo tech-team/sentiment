@@ -1,5 +1,8 @@
+import re
+
 import tensorflow as tf
 import numpy as np
+import time
 
 from sentiment import SentimentAnalysisModel
 from sentiment.w2v_model import Word2VecModel
@@ -15,7 +18,7 @@ class SentimentCNN(SentimentAnalysisModel):
                  n_labels,
                  filter_sizes=(3,),
                  n_filters=1,
-                 filter_stride=(1, 2, 2, 1),
+                 filter_stride=(1, 1, 1, 1),
                  learning_rate=0.05,
                  batch_size=10,
                  n_steps=10000,
@@ -35,29 +38,31 @@ class SentimentCNN(SentimentAnalysisModel):
         self.summary_path = summary_path
 
         self._word2vec = Word2VecModel(sess=session)
-        self.embeddings = self.load_embeddings(embeddings_model_path, embeddings_vocab_path, embeddings_size)
-        self.embeddings_shape = self.embeddings.get_shape().as_list()
+        self.load_embeddings(embeddings_model_path, embeddings_vocab_path, embeddings_size)
+        self.embeddings_shape = self._word2vec.get_embeddings_shape()
 
         self._train_dataset = None
         self._train_labels = None
         self._logits = None
         self._loss = None
         self._train = None
-        self.saver = None
+        # self.saver = None
         self.build_graph()
 
     def load_embeddings(self, model_path, vocab_path, embeddings_size):
         self._word2vec.load_model(model_path, vocab_path, embeddings_size)
-        return self._word2vec.get_embeddings_constant()
 
     def create_model(self, data):
-        embed = tf.nn.embedding_lookup(self.embeddings, data)
+        embed = tf.nn.embedding_lookup(self._word2vec.w_in, data, name='embedding')
+        embed = tf.expand_dims(embed, -1)
 
         filters = []
         for filter_id, filter_size in enumerate(self.filter_sizes):
-            with tf.name_scope('conv-maxpool [{}:{}]'.format(filter_id, filter_size)):
-                weights = tf.Variable(tf.truncated_normal([filter_size, filter_size, 1, self.n_filters], stddev=0.1),
-                                      name='w')
+            with tf.name_scope('conv-maxpool-{}-{}'.format(filter_id, filter_size)):
+                weights = tf.Variable(
+                    tf.truncated_normal([filter_size, self.embeddings_shape[1], 1, self.n_filters], stddev=0.1),
+                    name='w'
+                )
                 bias = tf.Variable(tf.zeros([self.n_filters]), name='b')
 
                 conv = tf.nn.conv2d(embed, weights, list(self.filter_stride), padding='VALID', name='conv')
@@ -69,8 +74,15 @@ class SentimentCNN(SentimentAnalysisModel):
                                       name='pool')
                 filters.append(pool)
 
-        concat = tf.concat("HAVE NOT IDEA WHAT TO PUT HERE", filters)
+        concat = tf.concat(3, filters)
         h = tf.reshape(concat, [-1, len(filters) * self.n_filters])
+        h_shape = h.get_shape().as_list()
+
+        with tf.name_scope("fc"):
+            fc_weights = tf.Variable(tf.truncated_normal([h_shape[1], self.n_labels], stddev=0.1), name="fw")
+            fc_biases = tf.Variable(tf.constant(0.0, shape=[self.n_labels]), name="b")
+            h = tf.matmul(h, fc_weights) + fc_biases
+
         return h
 
     def loss(self, logits, labels):
@@ -83,31 +95,40 @@ class SentimentCNN(SentimentAnalysisModel):
         return optimizer
 
     def build_graph(self):
-        train_set_shape = (self.batch_size, self.sentence_length, self.embeddings_shape[1], 1)
+        train_set_shape = (self.batch_size, self.sentence_length)
         self._train_dataset = tf.placeholder(tf.int32, shape=train_set_shape, name='train_data')
-        self._train_labels = tf.placeholder(tf.int32, shape=(self.batch_size, self.n_labels), name='train_labels')
+        self._train_labels = tf.placeholder(tf.float32, shape=(self.batch_size, self.n_labels), name='train_labels')
 
         self._logits = self.create_model(self._train_dataset)
         self._loss = self.loss(self._logits, self._train_labels)
-        self._train = self.optimze(self.loss)
+        self._train = self.optimze(self._loss)
 
-        tf.initialize_all_variables().run()
-
-        self.saver = tf.train.Saver()
+        # self.saver = tf.train.Saver()
 
     def train(self,
               train_dataset, train_labels,
               valid_dataset=None, valid_labels=None,
               test_dataset=None, test_labels=None):
-        train_dataset, train_labels = self.preprocess_dataset(train_dataset, train_labels)
-        valid_dataset, valid_labels = self.preprocess_dataset(valid_dataset, valid_labels)
-        test_dataset, test_labels = self.preprocess_dataset(test_dataset, test_labels)
+        train_dataset, train_labels = self.prepare_dataset(train_dataset, train_labels)
+        valid_dataset, valid_labels = self.prepare_dataset(valid_dataset, valid_labels)
+        test_dataset, test_labels = self.prepare_dataset(test_dataset, test_labels)
 
         has_validation_set = valid_dataset is not None and valid_labels is not None
         has_test_set = test_dataset is not None and test_labels is not None
 
+        print('Train dataset: size = {}; shape = {}'.format(len(train_dataset), train_dataset.shape))
+        if has_validation_set:
+            print('Valid dataset: size = {}; shape = {}'.format(len(valid_dataset), valid_dataset.shape))
+            valid_dataset = tf.constant(valid_dataset, name='valid_dataset')
+            valid_labels = tf.constant(valid_labels, name='valid_labels')
+        if has_test_set:
+            print('Test dataset: size = {}; shape = {}'.format(len(test_dataset), test_dataset.shape))
+            test_dataset = tf.constant(test_dataset, name='test_dataset')
+            test_labels = tf.constant(test_labels, name='test_labels')
+
         train_prediction = tf.nn.softmax(self._logits, name='train_prediction')
-        batch_accuracy, batch_accuracy_summary = self.tf_accuracy(train_prediction, train_labels, 'batch_accuracy')
+        batch_accuracy, batch_accuracy_summary = self.tf_accuracy(train_prediction, self._train_labels,
+                                                                  'batch_accuracy')
 
         if has_validation_set:
             valid_prediction = tf.nn.softmax(self.create_model(valid_dataset), name='valid_prediction')
@@ -121,9 +142,10 @@ class SentimentCNN(SentimentAnalysisModel):
 
         writer = tf.train.SummaryWriter(self.summary_path, self.session.graph_def)
 
+        tf.initialize_all_variables().run()
         for step in range(self.n_steps):
             offset = (step * self.batch_size) % (train_labels.shape[0] - self.batch_size)
-            batch_data = train_dataset[offset:(offset + self.batch_size), :, :, :]
+            batch_data = train_dataset[offset:(offset + self.batch_size), :]
             batch_labels = train_labels[offset:(offset + self.batch_size), :]
 
             feed_dict = {
@@ -144,6 +166,7 @@ class SentimentCNN(SentimentAnalysisModel):
                     valid_acc_summary = valid_accuracy_summary.eval()
                     print("Validation accuracy: %.3f" % valid_acc)
                     writer.add_summary(valid_acc_summary, step)
+                print()
         if test_prediction is not None:
             print("Test accuracy: %.1f%%" % self.accuracy(test_prediction.eval(), test_labels))
 
@@ -157,12 +180,26 @@ class SentimentCNN(SentimentAnalysisModel):
     def accuracy(predictions, labels):
         return 100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1)) / predictions.shape[0]
 
-    def preprocess_dataset(self, dataset, labels):
-        # TODO: clean sentences from special symbols
-        # TODO: pad sentences to self.sentence_length
-        # TODO: split into words and map them into their ids in the embeddings
-        # TODO: lookup into embeddings and map words to their ids
-
+    def prepare_dataset(self, dataset, labels):
         if dataset is None and labels is None:
             return None, None
-        return dataset, labels
+
+        assert dataset.shape[0] == labels.shape[0]
+
+        processed_dataset = np.ndarray((len(dataset), self.sentence_length), dtype=np.int32)
+
+        real_dataset_length = 0
+        for i, words in enumerate(dataset):
+            words = self._word2vec.word2id_many(words)
+            if words is not None:
+                sentence_padding = self.sentence_length - len(words)
+                words = np.pad(words, (0, sentence_padding), mode='constant')
+                processed_dataset[real_dataset_length, :] = words
+                real_dataset_length += 1
+            # if i % 100 == 0:
+            #     print('Processed sentence {}/{}.'.format(
+            #         i + 1,
+            #         len(dataset)))
+
+        processed_dataset = processed_dataset[:real_dataset_length, :]
+        return processed_dataset, labels
