@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow.python.framework.errors
 
 
 class Word2VecModel:
@@ -8,18 +9,18 @@ class Word2VecModel:
         self.word2id = {}
 
     def load_model(self, model_file, vocab_file, emb_size):
-        print('Loading vocab...')
+        print('Loading word2vec vocab...')
 
         self.word2id = {}
-        with open('./saved/vocab.txt', 'r') as vocab_file:
+        with open(vocab_file, 'r') as vocab_file:
             for i, line in enumerate(vocab_file):
-                word, id = line.split(' ')
+                word, _ = line.split(' ')
                 self.word2id[word] = i
 
         vocab_size = len(self.word2id)
         self.w_in = tf.Variable(tf.zeros([vocab_size, emb_size]), dtype=tf.float32, name="w_in")
 
-        print('Loading model...')
+        print('Loading word2vec model...')
         saver = tf.train.Saver()
         saver.restore(self.sess, model_file)
 
