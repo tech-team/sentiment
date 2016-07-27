@@ -62,7 +62,10 @@ def load_preprocessed_dataset(path, size=None):
         json_str = f.read()
         data = json.loads(json_str)
 
-    return np.asarray(data['dataset']), np.asarray(data['labels'])
+    if size is None:
+        size = len(data['dataset'])
+
+    return np.asarray(data['dataset'][:size]), np.asarray(data['labels'][:size])
 
 
 def load_dataset(path, preprocess=False, size=None, shuffle=False):
@@ -98,7 +101,7 @@ def main():
     # return
 
     train_dataset, train_labels, valid_dataset, valid_labels = \
-        load_dataset('data/preprocessed.json', preprocess=False)
+        load_dataset('data/preprocessed.json', preprocess=False, size=10000)
 
     with tf.Graph().as_default() as graph:
         with tf.Session(graph=graph) as session:
