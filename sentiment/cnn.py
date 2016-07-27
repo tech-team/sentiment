@@ -33,7 +33,7 @@ class SentimentCNN(SentimentAnalysisModel):
         self.filter_sizes = filter_sizes
         self.n_filters = n_filters
         self.filter_stride = filter_stride
-        self.dropout_keep_prob = dropout_keep_prob
+        self.dropout_keep_prob_value = dropout_keep_prob
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.n_steps = n_steps
@@ -44,52 +44,54 @@ class SentimentCNN(SentimentAnalysisModel):
         self.load_embeddings(embeddings_model_path, embeddings_vocab_path, embeddings_size)
         self.embeddings_shape = self._word2vec.get_embeddings_shape()
 
-        self._train_dataset = None
-        self._train_labels = None
+        self._x = None
+        self._y = None
+        self._dropout_keep_prob = None
         self._logits = None
         self._loss = None
-        self._train = None
+        self._prediction = None
+        self._accuracy = None
+        self._optimizer = None
         # self.saver = None
         self.build_graph()
 
     def load_embeddings(self, model_path, vocab_path, embeddings_size):
         self._word2vec.load_model(model_path, vocab_path, embeddings_size)
 
-    def create_model(self, data, name):
-        with tf.name_scope(name):
-            embed = tf.nn.embedding_lookup(self._word2vec.w_in, data, name='embedding')
-            embed = tf.expand_dims(embed, -1)
+    def create_model(self, data):
+        embed = tf.nn.embedding_lookup(self._word2vec.w_in, data, name='embedding')
+        embed = tf.expand_dims(embed, -1)
 
-            filters = []
-            for filter_id, filter_size in enumerate(self.filter_sizes):
-                with tf.name_scope('conv-maxpool-{}-{}'.format(filter_id, filter_size)):
-                    weights = tf.Variable(
-                        tf.truncated_normal([filter_size, self.embeddings_shape[1], 1, self.n_filters], stddev=0.1),
-                        name='w'
-                    )
-                    bias = tf.Variable(tf.zeros([self.n_filters]), name='b')
+        filters = []
+        for filter_id, filter_size in enumerate(self.filter_sizes):
+            with tf.name_scope('conv-maxpool-{}-{}'.format(filter_id, filter_size)):
+                weights = tf.Variable(
+                    tf.truncated_normal([filter_size, self.embeddings_shape[1], 1, self.n_filters], stddev=0.1),
+                    name='w'
+                )
+                bias = tf.Variable(tf.zeros([self.n_filters]), name='b')
 
-                    conv = tf.nn.conv2d(embed, weights, list(self.filter_stride), padding='VALID', name='conv')
-                    relu = tf.nn.relu(tf.nn.bias_add(conv, bias), name='relu')
-                    pool = tf.nn.max_pool(relu,
-                                          [1, self.sentence_length - filter_size + 1, 1, 1],
-                                          [1, 1, 1, 1],
-                                          padding='VALID',
-                                          name='pool')
-                    filters.append(pool)
+                conv = tf.nn.conv2d(embed, weights, list(self.filter_stride), padding='VALID', name='conv')
+                relu = tf.nn.relu(tf.nn.bias_add(conv, bias), name='relu')
+                pool = tf.nn.max_pool(relu,
+                                      [1, self.sentence_length - filter_size + 1, 1, 1],
+                                      [1, 1, 1, 1],
+                                      padding='VALID',
+                                      name='pool')
+                filters.append(pool)
 
-            concat = tf.concat(3, filters)
-            h = tf.reshape(concat, [-1, len(filters) * self.n_filters])
-            h_shape = h.get_shape().as_list()
+        concat = tf.concat(3, filters)
+        h = tf.reshape(concat, [-1, len(filters) * self.n_filters])
+        h_shape = h.get_shape().as_list()
 
-            with tf.name_scope("fc"):
-                fc_weights = tf.Variable(tf.truncated_normal([h_shape[1], self.n_labels], stddev=0.1), name="w")
-                fc_biases = tf.Variable(tf.constant(0.0, shape=[self.n_labels]), name="b")
-                h = tf.matmul(h, fc_weights) + fc_biases
+        with tf.name_scope("fc"):
+            fc_weights = tf.Variable(tf.truncated_normal([h_shape[1], self.n_labels], stddev=0.1), name="w")
+            fc_biases = tf.Variable(tf.constant(0.0, shape=[self.n_labels]), name="b")
+            h = tf.matmul(h, fc_weights) + fc_biases
 
-            with tf.name_scope("dropout"):
-                h = tf.nn.dropout(h, self.dropout_keep_prob)
-            return h
+        with tf.name_scope("dropout"):
+            h = tf.nn.dropout(h, self._dropout_keep_prob)
+        return h
 
     def loss(self, logits, labels):
         with tf.name_scope("xent"):
@@ -101,13 +103,15 @@ class SentimentCNN(SentimentAnalysisModel):
         return optimizer
 
     def build_graph(self):
-        train_set_shape = (self.batch_size, self.sentence_length)
-        self._train_dataset = tf.placeholder(tf.int32, shape=train_set_shape, name='train_data')
-        self._train_labels = tf.placeholder(tf.float32, shape=(self.batch_size, self.n_labels), name='train_labels')
+        self._x = tf.placeholder(tf.int32, shape=(None, self.sentence_length), name='x')
+        self._y = tf.placeholder(tf.float32, shape=(None, self.n_labels), name='y')
+        self._dropout_keep_prob = tf.placeholder(dtype=tf.float32, name='dropout_prob')
 
-        self._logits = self.create_model(self._train_dataset, 'train')
-        self._loss = self.loss(self._logits, self._train_labels)
-        self._train = self.optimze(self._loss)
+        self._logits = self.create_model(self._x)
+        self._prediction = tf.nn.softmax(self._logits, name='prediction')
+        self._accuracy = self.tf_accuracy(self._prediction, self._y)
+        self._loss = self.loss(self._logits, self._y)
+        self._optimizer = self.optimze(self._loss)
 
         # self.saver = tf.train.Saver()
 
@@ -125,28 +129,13 @@ class SentimentCNN(SentimentAnalysisModel):
         print('Train dataset: size = {}; shape = {}'.format(len(train_dataset), train_dataset.shape))
         if has_validation_set:
             print('Valid dataset: size = {}; shape = {}'.format(len(valid_dataset), valid_dataset.shape))
-            valid_dataset = tf.constant(valid_dataset, name='valid_dataset')
-            valid_labels = tf.constant(valid_labels, name='valid_labels')
         if has_test_set:
             print('Test dataset: size = {}; shape = {}'.format(len(test_dataset), test_dataset.shape))
-            test_dataset = tf.constant(test_dataset, name='test_dataset')
-            test_labels = tf.constant(test_labels, name='test_labels')
 
-        train_prediction = tf.nn.softmax(self._logits, name='train_prediction')
-        batch_accuracy, batch_accuracy_summary = self.tf_accuracy(train_prediction, self._train_labels,
-                                                                  'batch_accuracy')
-
-        if has_validation_set:
-            valid_prediction = tf.nn.softmax(self.create_model(valid_dataset, 'validation'), name='valid_prediction')
-            valid_accuracy, valid_accuracy_summary = self.tf_accuracy(valid_prediction, valid_labels, 'valid_accuracy')
-        else:
-            valid_accuracy, valid_accuracy_summary = None, None
-        if has_test_set:
-            test_prediction = tf.nn.softmax(self.create_model(test_dataset, 'test'), name='test_prediction')
-        else:
-            test_prediction = None
-
-        tf_loss_summary = tf.scalar_summary("loss", self._loss)
+        tf_train_loss_summary = tf.scalar_summary("train_loss", self._loss)
+        tf_valid_loss_summary = tf.scalar_summary("valid_loss", self._loss)
+        tf_train_accuracy_summary = tf.scalar_summary('train_accuracy', self._accuracy)
+        tf_valid_accuracy_summary = tf.scalar_summary('valid_accuracy', self._accuracy)
 
         writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 
@@ -157,33 +146,43 @@ class SentimentCNN(SentimentAnalysisModel):
             batch_labels = train_labels[offset:(offset + self.batch_size), :]
 
             feed_dict = {
-                self._train_dataset: batch_data,
-                self._train_labels: batch_labels
+                self._x: batch_data,
+                self._y: batch_labels,
+                self._dropout_keep_prob: self.dropout_keep_prob_value
             }
-            _, loss, loss_summary, predictions, batch_summary, batch_acc = self.session.run(
-                [self._train, self._loss, tf_loss_summary, train_prediction, batch_accuracy_summary, batch_accuracy],
+            _, loss, accuracy, loss_summary, accuracy_summary = self.session.run(
+                [self._optimizer, self._loss, self._accuracy, tf_train_loss_summary, tf_train_accuracy_summary],
                 feed_dict=feed_dict
             )
 
             writer.add_summary(loss_summary, step)
-            writer.add_summary(batch_summary, step)
+            writer.add_summary(accuracy_summary, step)
             print("{}: step {}, loss {:g}, accuracy {:g}".format(datetime.datetime.now().isoformat(),
-                                                                 step, loss, batch_acc), end="")
-            sys.stdout.flush()
+                                                                 step, loss, accuracy))
             if step % self.check_steps == 0:
-                if valid_accuracy is not None:
-                    valid_acc, valid_acc_summary = self.session.run([valid_accuracy, valid_accuracy_summary])
-                    print(", validation accuracy {:g}".format(valid_acc), end="")
-                    writer.add_summary(valid_acc_summary, step)
-            print()
-        if test_prediction is not None:
-            print("Test accuracy: %.1f%%" % self.accuracy(test_prediction.eval(), test_labels))
+                if has_validation_set is not None:
+                    feed_dict = {
+                        self._x: valid_dataset,
+                        self._y: valid_labels,
+                        self._dropout_keep_prob: 1.0
+                    }
+                    loss, accuracy, loss_summary, accuracy_summary = self.session.run(
+                        [self._loss, self._accuracy, tf_valid_loss_summary, tf_valid_accuracy_summary],
+                        feed_dict=feed_dict
+                    )
+                    writer.add_summary(loss_summary, step)
+                    writer.add_summary(accuracy_summary, step)
+                    print()
+                    print("VALIDATION: {}: step {}, loss {:g}, accuracy {:g}".format(datetime.datetime.now().isoformat(),
+                                                                                     step, loss, accuracy))
+                    print()
 
     @staticmethod
     def tf_accuracy(predictions, labels, tf_accuracy_name='accuracy'):
-        correct_prediction = tf.equal(tf.argmax(predictions, 1), tf.argmax(labels, 1))
-        acc = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-        return acc, tf.scalar_summary(tf_accuracy_name, acc)
+        with tf.name_scope('accuracy'):
+            correct_prediction = tf.equal(tf.argmax(predictions, 1), tf.argmax(labels, 1))
+            acc = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+        return acc
 
     @staticmethod
     def accuracy(predictions, labels):
