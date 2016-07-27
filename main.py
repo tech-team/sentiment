@@ -70,7 +70,7 @@ def main():
                 n_filters=128,
                 n_steps=1000,
                 batch_size=64,
-                learning_rate=0.0001,
+                learning_rate=0.003,
                 validation_check_steps=100
             )
 
