@@ -1,3 +1,5 @@
+import json
+
 import re
 
 import tensorflow as tf
@@ -14,7 +16,7 @@ def make_one_hot(arr, size=None):
     return np.eye(size)[arr]
 
 
-def load_dataset(path):
+def preprocess_dataset(path, size=None):
     dataset = []
     labels = []
     data = pd.read_csv(path, header=None, encoding='latin1')
@@ -45,18 +47,59 @@ def load_dataset(path):
 
             labels.append(0 if sentiment == 0 else 1)
             i += 1
-        if i >= 10000:
+
+        if size and i >= size:
             break
+
     dataset = np.asarray(dataset)
     labels = make_one_hot(labels, size=2)
+
+    return dataset, labels
+
+
+def load_preprocessed_dataset(path, size=None):
+    with open(path, 'r') as f:
+        json_str = f.read()
+        data = json.loads(json_str)
+
+    return np.asarray(data['dataset']), np.asarray(data['labels'])
+
+
+def load_dataset(path, preprocess=False, size=None, shuffle=False):
+    if preprocess:
+        dataset, labels = preprocess_dataset(path=path, size=size)
+    else:
+        dataset, labels = load_preprocessed_dataset(path=path, size=size)
+
     print('Finished loading dataset')
     X_train, X_test, y_train, y_test = train_test_split(dataset, labels, test_size=0.33, random_state=42)
+
     return X_train, y_train, X_test, y_test
 
 
+def save_dataset(from_path, to_path, size=None):
+    dataset, labels = preprocess_dataset(path=from_path, size=size)
+
+    data = {
+        'dataset': dataset.tolist(),
+        'labels': labels.tolist(),
+    }
+
+    data_str = json.dumps(data, check_circular=False)
+    with open(to_path, 'w') as f:
+        f.write(data_str)
+
+
 def main():
+    # save_dataset(from_path='data/training.1600000.processed.noemoticon.csv',
+    #              to_path='data/preprocessed.json',
+    #              size=None)
+    #
+    # return
+
     train_dataset, train_labels, valid_dataset, valid_labels = \
-        load_dataset('data/training.1600000.processed.noemoticon.csv')
+        load_dataset('data/preprocessed.json', preprocess=False)
+
     with tf.Graph().as_default() as graph:
         with tf.Session(graph=graph) as session:
             cnn = SentimentCNN(
