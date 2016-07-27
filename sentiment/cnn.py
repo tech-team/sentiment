@@ -52,38 +52,39 @@ class SentimentCNN(SentimentAnalysisModel):
     def load_embeddings(self, model_path, vocab_path, embeddings_size):
         self._word2vec.load_model(model_path, vocab_path, embeddings_size)
 
-    def create_model(self, data):
-        embed = tf.nn.embedding_lookup(self._word2vec.w_in, data, name='embedding')
-        embed = tf.expand_dims(embed, -1)
+    def create_model(self, data, name):
+        with tf.name_scope(name):
+            embed = tf.nn.embedding_lookup(self._word2vec.w_in, data, name='embedding')
+            embed = tf.expand_dims(embed, -1)
 
-        filters = []
-        for filter_id, filter_size in enumerate(self.filter_sizes):
-            with tf.name_scope('conv-maxpool-{}-{}'.format(filter_id, filter_size)):
-                weights = tf.Variable(
-                    tf.truncated_normal([filter_size, self.embeddings_shape[1], 1, self.n_filters], stddev=0.1),
-                    name='w'
-                )
-                bias = tf.Variable(tf.zeros([self.n_filters]), name='b')
+            filters = []
+            for filter_id, filter_size in enumerate(self.filter_sizes):
+                with tf.name_scope('conv-maxpool-{}-{}'.format(filter_id, filter_size)):
+                    weights = tf.Variable(
+                        tf.truncated_normal([filter_size, self.embeddings_shape[1], 1, self.n_filters], stddev=0.1),
+                        name='w'
+                    )
+                    bias = tf.Variable(tf.zeros([self.n_filters]), name='b')
 
-                conv = tf.nn.conv2d(embed, weights, list(self.filter_stride), padding='VALID', name='conv')
-                relu = tf.nn.relu(conv + bias, name='relu')
-                pool = tf.nn.max_pool(relu,
-                                      [1, self.sentence_length - filter_size + 1, 1, 1],
-                                      [1, 1, 1, 1],
-                                      padding='VALID',
-                                      name='pool')
-                filters.append(pool)
+                    conv = tf.nn.conv2d(embed, weights, list(self.filter_stride), padding='VALID', name='conv')
+                    relu = tf.nn.relu(conv + bias, name='relu')
+                    pool = tf.nn.max_pool(relu,
+                                          [1, self.sentence_length - filter_size + 1, 1, 1],
+                                          [1, 1, 1, 1],
+                                          padding='VALID',
+                                          name='pool')
+                    filters.append(pool)
 
-        concat = tf.concat(3, filters)
-        h = tf.reshape(concat, [-1, len(filters) * self.n_filters])
-        h_shape = h.get_shape().as_list()
+            concat = tf.concat(3, filters)
+            h = tf.reshape(concat, [-1, len(filters) * self.n_filters])
+            h_shape = h.get_shape().as_list()
 
-        with tf.name_scope("fc"):
-            fc_weights = tf.Variable(tf.truncated_normal([h_shape[1], self.n_labels], stddev=0.1), name="fw")
-            fc_biases = tf.Variable(tf.constant(0.0, shape=[self.n_labels]), name="b")
-            h = tf.matmul(h, fc_weights) + fc_biases
+            with tf.name_scope("fc"):
+                fc_weights = tf.Variable(tf.truncated_normal([h_shape[1], self.n_labels], stddev=0.1), name="fw")
+                fc_biases = tf.Variable(tf.constant(0.0, shape=[self.n_labels]), name="b")
+                h = tf.matmul(h, fc_weights) + fc_biases
 
-        return h
+            return h
 
     def loss(self, logits, labels):
         with tf.name_scope("xent"):
@@ -99,7 +100,7 @@ class SentimentCNN(SentimentAnalysisModel):
         self._train_dataset = tf.placeholder(tf.int32, shape=train_set_shape, name='train_data')
         self._train_labels = tf.placeholder(tf.float32, shape=(self.batch_size, self.n_labels), name='train_labels')
 
-        self._logits = self.create_model(self._train_dataset)
+        self._logits = self.create_model(self._train_dataset, 'train')
         self._loss = self.loss(self._logits, self._train_labels)
         self._train = self.optimze(self._loss)
 
@@ -131,16 +132,16 @@ class SentimentCNN(SentimentAnalysisModel):
                                                                   'batch_accuracy')
 
         if has_validation_set:
-            valid_prediction = tf.nn.softmax(self.create_model(valid_dataset), name='valid_prediction')
+            valid_prediction = tf.nn.softmax(self.create_model(valid_dataset, 'validation'), name='valid_prediction')
             valid_accuracy, valid_accuracy_summary = self.tf_accuracy(valid_prediction, valid_labels, 'valid_accuracy')
         else:
             valid_accuracy, valid_accuracy_summary = None, None
         if has_test_set:
-            test_prediction = tf.nn.softmax(self.create_model(test_dataset), name='test_prediction')
+            test_prediction = tf.nn.softmax(self.create_model(test_dataset, 'test'), name='test_prediction')
         else:
             test_prediction = None
 
-        writer = tf.train.SummaryWriter(self.summary_path, self.session.graph_def)
+        writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 
         tf.initialize_all_variables().run()
         for step in range(self.n_steps):
@@ -162,8 +163,7 @@ class SentimentCNN(SentimentAnalysisModel):
                 print("Minibatch loss at step", step, ":", loss)
                 print("Minibatch accuracy: %.3f" % batch_acc)
                 if valid_accuracy is not None:
-                    valid_acc = valid_accuracy.eval()
-                    valid_acc_summary = valid_accuracy_summary.eval()
+                    valid_acc, valid_acc_summary = self.session.run([valid_accuracy, valid_accuracy_summary])
                     print("Validation accuracy: %.3f" % valid_acc)
                     writer.add_summary(valid_acc_summary, step)
                 print()

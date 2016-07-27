@@ -45,7 +45,7 @@ def load_dataset(path):
 
             labels.append(0 if sentiment == 0 else 1)
             i += 1
-        if i >= 100000:
+        if i >= 10000:
             break
     dataset = np.asarray(dataset)
     labels = make_one_hot(labels, size=2)
@@ -67,7 +67,8 @@ def main():
             n_labels=2,
             filter_sizes=(2, 3, 4),
             n_filters=2,
-            n_steps=100000
+            n_steps=1000,
+            validation_check_steps=100
         )
 
         cnn.train(train_dataset=train_dataset, train_labels=train_labels,
