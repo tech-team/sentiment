@@ -57,18 +57,18 @@ def load_dataset(path):
 def main():
     train_dataset, train_labels, valid_dataset, valid_labels = \
         load_dataset('data/training.1600000.processed.noemoticon.csv')
-    with tf.Graph().as_default():
-        with tf.Session() as session:
+    with tf.Graph().as_default() as graph:
+        with tf.Session(graph=graph) as session:
             cnn = SentimentCNN(
                 session=session,
                 embeddings_model_path='./sentiment/saved/model.ckpt-2264733',
                 embeddings_vocab_path='./sentiment/saved/vocab.txt',
                 embeddings_size=200,
-                sentence_length=50,
+                sentence_length=70,
                 n_labels=2,
                 filter_sizes=(3, 4, 5),
                 n_filters=128,
-                n_steps=1000,
+                n_steps=2000,
                 batch_size=64,
                 learning_rate=0.003,
                 validation_check_steps=100

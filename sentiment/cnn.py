@@ -146,6 +146,8 @@ class SentimentCNN(SentimentAnalysisModel):
         else:
             test_prediction = None
 
+        tf_loss_summary = tf.scalar_summary("loss", self._loss)
+
         writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 
         tf.initialize_all_variables().run()
@@ -158,11 +160,12 @@ class SentimentCNN(SentimentAnalysisModel):
                 self._train_dataset: batch_data,
                 self._train_labels: batch_labels
             }
-            _, loss, predictions, batch_summary, batch_acc = self.session.run(
-                [self._train, self._loss, train_prediction, batch_accuracy_summary, batch_accuracy],
+            _, loss, loss_summary, predictions, batch_summary, batch_acc = self.session.run(
+                [self._train, self._loss, tf_loss_summary, train_prediction, batch_accuracy_summary, batch_accuracy],
                 feed_dict=feed_dict
             )
 
+            writer.add_summary(loss_summary, step)
             writer.add_summary(batch_summary, step)
             print("{}: step {}, loss {:g}, accuracy {:g}".format(datetime.datetime.now().isoformat(),
                                                                  step, loss, batch_acc), end="")
