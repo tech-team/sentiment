@@ -1,5 +1,6 @@
-import re
+import sys
 
+import datetime
 import tensorflow as tf
 import numpy as np
 import time
@@ -19,6 +20,7 @@ class SentimentCNN(SentimentAnalysisModel):
                  filter_sizes=(3,),
                  n_filters=1,
                  filter_stride=(1, 1, 1, 1),
+                 dropout_keep_prob=0.5,
                  learning_rate=0.05,
                  batch_size=10,
                  n_steps=10000,
@@ -31,6 +33,7 @@ class SentimentCNN(SentimentAnalysisModel):
         self.filter_sizes = filter_sizes
         self.n_filters = n_filters
         self.filter_stride = filter_stride
+        self.dropout_keep_prob = dropout_keep_prob
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.n_steps = n_steps
@@ -67,7 +70,7 @@ class SentimentCNN(SentimentAnalysisModel):
                     bias = tf.Variable(tf.zeros([self.n_filters]), name='b')
 
                     conv = tf.nn.conv2d(embed, weights, list(self.filter_stride), padding='VALID', name='conv')
-                    relu = tf.nn.relu(conv + bias, name='relu')
+                    relu = tf.nn.relu(tf.nn.bias_add(conv, bias), name='relu')
                     pool = tf.nn.max_pool(relu,
                                           [1, self.sentence_length - filter_size + 1, 1, 1],
                                           [1, 1, 1, 1],
@@ -80,10 +83,12 @@ class SentimentCNN(SentimentAnalysisModel):
             h_shape = h.get_shape().as_list()
 
             with tf.name_scope("fc"):
-                fc_weights = tf.Variable(tf.truncated_normal([h_shape[1], self.n_labels], stddev=0.1), name="fw")
+                fc_weights = tf.Variable(tf.truncated_normal([h_shape[1], self.n_labels], stddev=0.1), name="w")
                 fc_biases = tf.Variable(tf.constant(0.0, shape=[self.n_labels]), name="b")
                 h = tf.matmul(h, fc_weights) + fc_biases
 
+            with tf.name_scope("dropout"):
+                h = tf.nn.dropout(h, self.dropout_keep_prob)
             return h
 
     def loss(self, logits, labels):
@@ -92,7 +97,7 @@ class SentimentCNN(SentimentAnalysisModel):
         return loss
 
     def optimze(self, loss):
-        optimizer = tf.train.GradientDescentOptimizer(self.learning_rate).minimize(loss)
+        optimizer = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
         return optimizer
 
     def build_graph(self):
@@ -144,7 +149,7 @@ class SentimentCNN(SentimentAnalysisModel):
         writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 
         tf.initialize_all_variables().run()
-        for step in range(self.n_steps):
+        for step in range(self.n_steps + 1):
             offset = (step * self.batch_size) % (train_labels.shape[0] - self.batch_size)
             batch_data = train_dataset[offset:(offset + self.batch_size), :]
             batch_labels = train_labels[offset:(offset + self.batch_size), :]
@@ -159,14 +164,15 @@ class SentimentCNN(SentimentAnalysisModel):
             )
 
             writer.add_summary(batch_summary, step)
+            print("{}: step {}, loss {:g}, accuracy {:g}".format(datetime.datetime.now().isoformat(),
+                                                                 step, loss, batch_acc), end="")
+            sys.stdout.flush()
             if step % self.check_steps == 0:
-                print("Minibatch loss at step", step, ":", loss)
-                print("Minibatch accuracy: %.3f" % batch_acc)
                 if valid_accuracy is not None:
                     valid_acc, valid_acc_summary = self.session.run([valid_accuracy, valid_accuracy_summary])
-                    print("Validation accuracy: %.3f" % valid_acc)
+                    print(", validation accuracy {:g}".format(valid_acc), end="")
                     writer.add_summary(valid_acc_summary, step)
-                print()
+            print()
         if test_prediction is not None:
             print("Test accuracy: %.1f%%" % self.accuracy(test_prediction.eval(), test_labels))
 
@@ -192,8 +198,11 @@ class SentimentCNN(SentimentAnalysisModel):
         for i, words in enumerate(dataset):
             words = self._word2vec.word2id_many(words)
             if words is not None:
-                sentence_padding = self.sentence_length - len(words)
-                words = np.pad(words, (0, sentence_padding), mode='constant')
+                if len(words) < self.sentence_length:
+                    sentence_padding = self.sentence_length - len(words)
+                    words = np.pad(words, (0, sentence_padding), mode='constant')
+                elif len(words) > self.sentence_length:
+                    words = words[:self.sentence_length]
                 processed_dataset[real_dataset_length, :] = words
                 real_dataset_length += 1
             # if i % 100 == 0:
