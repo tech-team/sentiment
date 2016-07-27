@@ -195,22 +195,31 @@ class SentimentCNN(SentimentAnalysisModel):
         assert dataset.shape[0] == labels.shape[0]
 
         processed_dataset = np.ndarray((len(dataset), self.sentence_length), dtype=np.int32)
+        processed_labels = np.ndarray(labels.shape, dtype=np.int32)
 
         real_dataset_length = 0
-        for i, words in enumerate(dataset):
-            words = self._word2vec.word2id_many(words)
-            if words is not None:
+        empty_sents = 0
+        for i, source_words in enumerate(dataset):
+            words = self._word2vec.word2id_many(source_words)
+            if words:
                 if len(words) < self.sentence_length:
                     sentence_padding = self.sentence_length - len(words)
                     words = np.pad(words, (0, sentence_padding), mode='constant')
                 elif len(words) > self.sentence_length:
                     words = words[:self.sentence_length]
                 processed_dataset[real_dataset_length, :] = words
+                processed_labels[real_dataset_length] = labels[i]
                 real_dataset_length += 1
+            elif len(words) == 0:
+                empty_sents += 1
             # if i % 100 == 0:
             #     print('Processed sentence {}/{}.'.format(
             #         i + 1,
             #         len(dataset)))
 
+        print('Empty sentences: {}'.format(empty_sents))
+
         processed_dataset = processed_dataset[:real_dataset_length, :]
-        return processed_dataset, labels
+        processed_labels = processed_labels[:real_dataset_length]
+
+        return processed_dataset, processed_labels[:real_dataset_length]
