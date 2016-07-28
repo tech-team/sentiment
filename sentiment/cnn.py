@@ -21,6 +21,7 @@ class SentimentCNN(SentimentAnalysisModel):
                  n_filters=1,
                  filter_stride=(1, 1, 1, 1),
                  dropout_keep_prob=0.5,
+                 l2_lambda=0.0,
                  learning_rate=0.05,
                  batch_size=10,
                  n_steps=10000,
@@ -34,6 +35,7 @@ class SentimentCNN(SentimentAnalysisModel):
         self.n_filters = n_filters
         self.filter_stride = filter_stride
         self.dropout_keep_prob_value = dropout_keep_prob
+        self.l2_lambda = l2_lambda
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.n_steps = n_steps
@@ -52,6 +54,8 @@ class SentimentCNN(SentimentAnalysisModel):
         self._prediction = None
         self._accuracy = None
         self._optimizer = None
+        self._w = []
+        self._b = []
         # self.saver = None
         self.build_graph()
 
@@ -70,6 +74,8 @@ class SentimentCNN(SentimentAnalysisModel):
                     name='w'
                 )
                 bias = tf.Variable(tf.zeros([self.n_filters]), name='b')
+                self._w.append(weights)
+                self._b.append(bias)
 
                 conv = tf.nn.conv2d(embed, weights, list(self.filter_stride), padding='VALID', name='conv')
                 relu = tf.nn.relu(tf.nn.bias_add(conv, bias), name='relu')
@@ -89,13 +95,23 @@ class SentimentCNN(SentimentAnalysisModel):
             fc_biases = tf.Variable(tf.constant(0.0, shape=[self.n_labels]), name="b")
             h = tf.matmul(h, fc_weights) + fc_biases
 
+            self._w.append(fc_weights)
+            self._b.append(fc_biases)
+
         with tf.name_scope("dropout"):
             h = tf.nn.dropout(h, self._dropout_keep_prob)
         return h
 
-    def loss(self, logits, labels):
+    def loss(self, logits, labels, weights=None, biases=None):
         with tf.name_scope("xent"):
             loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, labels))
+
+            l2_reg = 0.0
+            if weights:
+                l2_reg += sum(tf.map_fn(tf.nn.l2_loss, weights))
+            if biases:
+                l2_reg += sum(tf.map_fn(tf.nn.l2_loss, biases))
+            loss += self.l2_lambda * l2_reg
         return loss
 
     def optimze(self, loss):
@@ -177,6 +193,18 @@ class SentimentCNN(SentimentAnalysisModel):
                                                                                      step, loss, accuracy))
                     print()
 
+    def predict(self, words):
+        words, _ = self.prepare_dataset(np.asarray([words]))
+        feed_dict = {
+            self._x: words,
+            self._dropout_keep_prob: 1.0
+        }
+        prediction = self.session.run(
+            [self._prediction],
+            feed_dict=feed_dict
+        )
+        return prediction[0][0]
+
     @staticmethod
     def tf_accuracy(predictions, labels, tf_accuracy_name='accuracy'):
         with tf.name_scope('accuracy'):
@@ -188,14 +216,17 @@ class SentimentCNN(SentimentAnalysisModel):
     def accuracy(predictions, labels):
         return 100.0 * np.sum(np.argmax(predictions, 1) == np.argmax(labels, 1)) / predictions.shape[0]
 
-    def prepare_dataset(self, dataset, labels):
+    def prepare_dataset(self, dataset, labels=None):
         if dataset is None and labels is None:
             return None, None
 
-        assert dataset.shape[0] == labels.shape[0]
+        assert labels is None or dataset.shape[0] == labels.shape[0]
 
         processed_dataset = np.ndarray((len(dataset), self.sentence_length), dtype=np.int32)
-        processed_labels = np.ndarray(labels.shape, dtype=np.int32)
+        if labels is not None:
+            processed_labels = np.ndarray(labels.shape, dtype=np.int32)
+        else:
+            processed_labels = None
 
         real_dataset_length = 0
         empty_sents = 0
@@ -208,7 +239,8 @@ class SentimentCNN(SentimentAnalysisModel):
                 elif len(words) > self.sentence_length:
                     words = words[:self.sentence_length]
                 processed_dataset[real_dataset_length, :] = words
-                processed_labels[real_dataset_length] = labels[i]
+                if processed_labels is not None:
+                    processed_labels[real_dataset_length] = labels[i]
                 real_dataset_length += 1
             elif len(words) == 0:
                 empty_sents += 1
@@ -220,6 +252,7 @@ class SentimentCNN(SentimentAnalysisModel):
         print('Empty sentences: {}'.format(empty_sents))
 
         processed_dataset = processed_dataset[:real_dataset_length, :]
-        processed_labels = processed_labels[:real_dataset_length]
-
-        return processed_dataset, processed_labels[:real_dataset_length]
+        if processed_labels is not None:
+            processed_labels = processed_labels[:real_dataset_length]
+            return processed_dataset, processed_labels[:real_dataset_length]
+        return processed_dataset, None

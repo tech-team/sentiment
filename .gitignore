@@ -92,3 +92,4 @@ ENV/
 sentiment/temp/*.zip
 sentiment/temp/MNIST_data
 sentiment/temp/tsne.png
+summary
