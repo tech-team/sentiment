@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 from sklearn.cross_validation import train_test_split
 
+from preprocess.rubtsova_csv_to_corpus import clean_tweet
+
 letter_emoticons_regex = re.compile(r'[:;][dpoзv]', re.IGNORECASE)
 only_letters_regex = re.compile(r'[^\w ]|\d', re.IGNORECASE)
 urls_regex = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',
@@ -21,12 +23,7 @@ def make_one_hot(arr, size=None):
 
 
 def text2words(text):
-    text = text.lower()
-    text = letter_emoticons_regex.sub('', text)
-    text = mentions_regex.sub('', text)
-    text = urls_regex.sub('', text)
-    text = only_letters_regex.sub('', text)
-    text = text.strip()
+    text = clean_tweet(text)
     words = spaces_regex.split(text)
     return words
 
@@ -79,6 +76,57 @@ def load_dataset(path, preprocess=False, size=None, shuffle=False):
     X_train, X_test, y_train, y_test = train_test_split(dataset, labels, test_size=0.33, random_state=42)
 
     return X_train, y_train, X_test, y_test
+
+
+def load_rubtsova_datasets(positive, negative, size=None):
+    dataset = []
+    labels = []
+
+    positive_data = pd.read_csv(positive, header=None, sep=';', index_col=False, names=[
+        'id', 'tdate', 'tname', 'ttext', 'ttype',
+        'trep', 'tfav', 'tstcount', 'tfol', 'tfrien', 'listcount'])
+
+    negative_data = pd.read_csv(negative, header=None, sep=';', index_col=False, names=[
+        'id', 'tdate', 'tname', 'ttext', 'ttype',
+        'trep', 'tfav', 'tstcount', 'tfol', 'tfrien', 'listcount'])
+
+    i = 0
+    for tweet in positive_data['ttext']:
+        words = text2words(tweet)
+        dataset.append(words)
+        labels.append(1)
+        i += 1
+
+        if size and i >= size:
+            break
+
+    i = 0
+    for tweet in negative_data['ttext']:
+        words = text2words(tweet)
+        dataset.append(words)
+        labels.append(0)
+        i += 1
+
+        if size and i >= size:
+            break
+
+    dataset = np.asarray(dataset)
+    labels = make_one_hot(labels, size=2)
+
+    dataset, labels = shuffle_in_unison(dataset, labels)
+
+    X_train, X_test, y_train, y_test = train_test_split(dataset, labels, test_size=0.33, random_state=42)
+
+    return X_train, y_train, X_test, y_test
+
+
+def shuffle_in_unison(a, b):
+    rng_state = np.random.get_state()
+    np.random.shuffle(a)
+    np.random.set_state(rng_state)
+    np.random.shuffle(b)
+
+    return a, b
 
 
 def save_dataset(from_path, to_path, size=None):

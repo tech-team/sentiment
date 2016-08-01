@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from data_utils import load_dataset, text2words
+from data_utils import load_dataset, text2words, load_rubtsova_datasets
 from sentiment.cnn import SentimentCNN
 
 
@@ -12,7 +12,9 @@ def main():
     # return
 
     train_dataset, train_labels, valid_dataset, valid_labels = \
-        load_dataset('data/preprocessed.json', preprocess=False, size=10000)
+        load_rubtsova_datasets('data/rubtsova/positive.csv',
+                               'data/rubtsova/negative.csv',
+                               size=15000)
 
     max_len = max(map(len, train_dataset))
     print('Maximum sentence length: {}'.format(max_len))
@@ -21,8 +23,8 @@ def main():
         with tf.Session(graph=graph) as session:
             cnn = SentimentCNN(
                 session=session,
-                embeddings_model_path='./sentiment/saved/model.ckpt-2264733',
-                embeddings_vocab_path='./sentiment/saved/vocab.txt',
+                embeddings_model_path='./data/rubtsova/trained/model.ckpt-175170',
+                embeddings_vocab_path='./data/rubtsova/trained/vocab.txt',
                 embeddings_size=200,
                 sentence_length=max_len,
                 n_labels=2,
@@ -49,7 +51,11 @@ def run_interactive(cnn):
             text = input('Text: ')
             words = text2words(text)
             prediction = cnn.predict(words)
-            print('Negative: {:g}. Positive: {:g}'.format(prediction[0], prediction[1]))
+
+            n = prediction[0]
+            p = prediction[1]
+
+            print('Negative: {:g}. Positive: {:g}'.format(n, p))
             print()
         except KeyboardInterrupt:
             return
