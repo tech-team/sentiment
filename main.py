@@ -33,8 +33,8 @@ def main():
                 l2_lambda=0.1,
                 n_filters=128,
                 n_steps=2000,
-                batch_size=128,
-                learning_rate=0.003,
+                batch_size=256,
+                learning_rate=0.002,
                 validation_check_steps=100,
                 summary_path='./summary'
             )
