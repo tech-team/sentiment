@@ -8,6 +8,7 @@ from sklearn.cross_validation import train_test_split
 
 from preprocess.rubtsova_csv_to_corpus import clean_tweet
 
+# deprecated: use regex'es from rubtsova_csv_to_corpus.py instead
 letter_emoticons_regex = re.compile(r'[:;][dpoзv]', re.IGNORECASE)
 only_letters_regex = re.compile(r'[^\w ]|\d', re.IGNORECASE)
 urls_regex = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',

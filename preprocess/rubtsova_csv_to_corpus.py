@@ -9,7 +9,7 @@ mentions_regex = re.compile(r'@(\w+)')
 positive_smiles_regex = re.compile(
     ":-\)|:\)|;\)|:D|:o\)|:]|:3|:c\)|:>|=]|8\)|=\)|:}|:^\)|:-D|8-D|8D|XD|=-D|=D|=-3|=3|\)\)|\^\^|\^_\^|\\o\/|\m\/|<3".lower())
 
-negative_smiles_regex = re.compile(r";\(|:\(|:\[|:{|\(\(|:'\(|:'\[|:3".lower())
+negative_smiles_regex = re.compile(r";\(|:\(|:\[|:{|\(\(|:'\(|:'\[|:3|:c|:с".lower())
 
 positive_smile_replacement = ' smpositive '
 negative_smile_replacement = ' smnegative '
