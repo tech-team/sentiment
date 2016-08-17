@@ -1,6 +1,6 @@
 import argparse
 
-from preprocess.rubtsova_csv_to_corpus import clean_tweet
+from data_utils import clean_tweet
 
 
 def main():
