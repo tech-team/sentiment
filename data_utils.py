@@ -1,20 +1,50 @@
+import html
 import json
-
 import re
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from sklearn.cross_validation import train_test_split
 
-from preprocess.rubtsova_csv_to_corpus import clean_tweet
+RUBTSOVA_HEADER = 'id tdate tname ttext ttype trep tfav tstcount tfol tfrien listcount'.split(' ')
 
-# deprecated: use regex'es from rubtsova_csv_to_corpus.py instead
-letter_emoticons_regex = re.compile(r'[:;][dpoзv]', re.IGNORECASE)
-only_letters_regex = re.compile(r'[^\w ]|\d', re.IGNORECASE)
-urls_regex = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',
-                        re.IGNORECASE)
-mentions_regex = re.compile(r'@(\w+)', re.IGNORECASE)
+
+urls_regex = re.compile(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+')
+mentions_regex = re.compile(r'@(\w+)')
+rt_regex = re.compile(r'\brt\b', re.IGNORECASE)
+positive_brace_regex = re.compile(r'\){2,}', re.IGNORECASE)
+# negative_brace_regex = re.compile(r'\({2,}', re.IGNORECASE)  # это не столько негатив, сколько неудовлетворение
+positive_smiles_regex = re.compile(r':-\)|:\)|;\)|\(:|\(=|:D|:o\)|:]|:3|:c\)|:>|=]|8\)|=\)|:}|:^\)|:-D|8-D|8D|XD|=-D|=D|=-3|=3|\)\)|\^\^|\^_\^|\\o/|\\m/|<3|:\*', re.IGNORECASE)  # nopep8
+negative_smiles_regex = re.compile(r';\(|:\(|:\[|:{|\(\(|:\'\(|:\'\[|:c|:с|D:|\):|\)=', re.IGNORECASE)
+only_letters_regex = re.compile(r'[^\w ]|\d|_')
+one_space_regex = re.compile(r' +')
 spaces_regex = re.compile(r'\s+')
+
+# positive_smile_replacement = ' smpositive '
+# negative_smile_replacement = ' smnegative '
+
+positive_smile_replacement = ''
+negative_smile_replacement = ''
+
+
+def clean_tweet(tweet):
+    text = tweet.lower()
+
+    text = html.unescape(text)
+
+    text = rt_regex.sub('', text)
+    text = mentions_regex.sub('', text)
+    text = urls_regex.sub('', text)
+
+    text = positive_brace_regex.sub(positive_smile_replacement, text)
+    text = positive_smiles_regex.sub(positive_smile_replacement, text)
+    text = negative_smiles_regex.sub(negative_smile_replacement, text)
+
+    text = only_letters_regex.sub(' ', text)
+    text = one_space_regex.sub(' ', text)
+
+    text = text.strip()
+    return text
 
 
 def make_one_hot(arr, size=None):
@@ -83,13 +113,8 @@ def load_rubtsova_datasets(positive, negative, size=None):
     dataset = []
     labels = []
 
-    positive_data = pd.read_csv(positive, header=None, sep=';', index_col=False, names=[
-        'id', 'tdate', 'tname', 'ttext', 'ttype',
-        'trep', 'tfav', 'tstcount', 'tfol', 'tfrien', 'listcount'])
-
-    negative_data = pd.read_csv(negative, header=None, sep=';', index_col=False, names=[
-        'id', 'tdate', 'tname', 'ttext', 'ttype',
-        'trep', 'tfav', 'tstcount', 'tfol', 'tfrien', 'listcount'])
+    positive_data = pd.read_csv(positive, header=None, sep=';', index_col=False, names=RUBTSOVA_HEADER)
+    negative_data = pd.read_csv(negative, header=None, sep=';', index_col=False, names=RUBTSOVA_HEADER)
 
     i = 0
     for tweet in positive_data['ttext']:
@@ -113,11 +138,9 @@ def load_rubtsova_datasets(positive, negative, size=None):
 
     dataset = np.asarray(dataset)
     labels = make_one_hot(labels, size=2)
-
     dataset, labels = shuffle_in_unison(dataset, labels)
 
     X_train, X_test, y_train, y_test = train_test_split(dataset, labels, test_size=0.33, random_state=42)
-
     return X_train, y_train, X_test, y_test
 
 
@@ -132,12 +155,13 @@ def shuffle_in_unison(a, b):
 
 def save_dataset(from_path, to_path, size=None):
     dataset, labels = preprocess_dataset(path=from_path, size=size)
+    dataset = dataset.tolist()
+    labels = labels.tolist()
 
     data = {
-        'dataset': dataset.tolist(),
-        'labels': labels.tolist(),
+        'dataset': dataset,
+        'labels': labels,
     }
 
-    data_str = json.dumps(data, check_circular=False)
     with open(to_path, 'w') as f:
-        f.write(data_str)
+        json.dump(data, f, check_circular=False)

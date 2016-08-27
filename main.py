@@ -14,7 +14,7 @@ def main():
     train_dataset, train_labels, valid_dataset, valid_labels = \
         load_rubtsova_datasets('data/rubtsova/positive.csv',
                                'data/rubtsova/negative.csv',
-                               size=15000)
+                               size=10000)
 
     max_len = max(map(len, train_dataset))
     print('Maximum sentence length: {}'.format(max_len))
@@ -23,7 +23,7 @@ def main():
         with tf.Session(graph=graph) as session:
             cnn = SentimentCNN(
                 session=session,
-                embeddings_model_path='./data/rubtsova/trained/model.ckpt-175170',
+                embeddings_model_path='./data/rubtsova/trained/model.ckpt-339401',
                 embeddings_vocab_path='./data/rubtsova/trained/vocab.txt',
                 embeddings_size=200,
                 sentence_length=max_len,
