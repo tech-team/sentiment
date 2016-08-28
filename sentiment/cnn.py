@@ -1,10 +1,8 @@
 import os
-import sys
 
 import datetime
 import tensorflow as tf
 import numpy as np
-import time
 
 from sentiment import SentimentAnalysisModel
 from sentiment.w2v_model import Word2VecModel
@@ -271,15 +269,13 @@ class SentimentCNN(SentimentAnalysisModel):
                 real_dataset_length += 1
             elif len(words) == 0:
                 empty_sents += 1
-            # if i % 100 == 0:
-            #     print('Processed sentence {}/{}.'.format(
-            #         i + 1,
-            #         len(dataset)))
-
-        print('Empty sentences: {}'.format(empty_sents))
 
         processed_dataset = processed_dataset[:real_dataset_length, :]
         if processed_labels is not None:
             processed_labels = processed_labels[:real_dataset_length]
             return processed_dataset, processed_labels[:real_dataset_length]
         return processed_dataset, None
+
+    def close(self):
+        self.session.close()
+
