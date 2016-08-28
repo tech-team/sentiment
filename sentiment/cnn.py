@@ -1,3 +1,4 @@
+import os
 import sys
 
 import datetime
@@ -10,6 +11,8 @@ from sentiment.w2v_model import Word2VecModel
 
 
 class SentimentCNN(SentimentAnalysisModel):
+    MODEL_FILE_NAME = 'sentiment_model.ckpt'
+
     def __init__(self,
                  session,
                  embeddings_model_path,
@@ -26,7 +29,8 @@ class SentimentCNN(SentimentAnalysisModel):
                  batch_size=10,
                  n_steps=10000,
                  validation_check_steps=500,
-                 summary_path='/tmp/tensorboard'):
+                 summary_path='/tmp/tensorboard',
+                 model_save_path=None):
         super().__init__()
         self.session = session
         self.sentence_length = sentence_length
@@ -41,6 +45,7 @@ class SentimentCNN(SentimentAnalysisModel):
         self.n_steps = n_steps
         self.check_steps = validation_check_steps
         self.summary_path = summary_path
+        self.model_save_path = model_save_path
 
         self._word2vec = Word2VecModel(sess=session)
         self.load_embeddings(embeddings_model_path, embeddings_vocab_path, embeddings_size)
@@ -56,7 +61,7 @@ class SentimentCNN(SentimentAnalysisModel):
         self._optimizer = None
         self._w = []
         self._b = []
-        # self.saver = None
+        self.saver = None
         self.build_graph()
 
     def load_embeddings(self, model_path, vocab_path, embeddings_size):
@@ -129,7 +134,10 @@ class SentimentCNN(SentimentAnalysisModel):
         self._loss = self.loss(self._logits, self._y)
         self._optimizer = self.optimze(self._loss)
 
-        # self.saver = tf.train.Saver()
+        if self.model_save_path is None:
+            print('WARNING: model_save_path is not specified, model won\'t be saved!')
+        else:
+            self.saver = tf.train.Saver()
 
     def train(self,
               train_dataset, train_labels,
@@ -192,6 +200,25 @@ class SentimentCNN(SentimentAnalysisModel):
                     print("VALIDATION: {}: step {}, loss {:g}, accuracy {:g}".format(datetime.datetime.now().isoformat(),
                                                                                      step, loss, accuracy))
                     print()
+
+        if self.model_save_path and self.saver:
+            self.save()
+
+    def save(self):
+        if self.model_save_path and self.saver:
+            save_path = self.saver.save(self.session, os.path.join(self.model_save_path, self.MODEL_FILE_NAME))
+            print('Model saved in file: {}'.format(save_path))
+            return save_path
+        else:
+            raise Exception('Can\'t save: model_save_path is None')
+
+    def restore(self):
+        if self.model_save_path and self.saver:
+            full_path = os.path.join(self.model_save_path, self.MODEL_FILE_NAME)
+            self.saver.restore(self.session, full_path)
+            print('Model restored from file: {}'.format(full_path))
+        else:
+            raise Exception('Can\'t restore: model_save_path is None')
 
     def predict(self, words):
         words, _ = self.prepare_dataset(np.asarray([words]))
