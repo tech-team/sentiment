@@ -1,3 +1,4 @@
 data/**/* filter=lfs diff=lfs merge=lfs -text
 preprocess/sql_utils/trained/* filter=lfs diff=lfs merge=lfs -text
 cnn_saved/* filter=lfs diff=lfs merge=lfs -text
+staged/* filter=lfs diff=lfs merge=lfs -text

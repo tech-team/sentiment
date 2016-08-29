@@ -71,7 +71,7 @@ def run_interactive(cnn):
     while True:
         try:
             text = input('Text: ')
-            n, p = predict(text)
+            n, p = predict(cnn, text)
             print('Negative: {:g}. Positive: {:g}'.format(n, p))
             print()
         except KeyboardInterrupt:
