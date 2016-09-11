@@ -162,6 +162,8 @@ class SentimentCNN(SentimentAnalysisModel):
         writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 
         tf.initialize_all_variables().run()
+
+        loss, accuracy = 0, 0
         for step in range(self.n_steps + 1):
             offset = (step * self.batch_size) % (train_labels.shape[0] - self.batch_size)
             batch_data = train_dataset[offset:(offset + self.batch_size), :]
@@ -201,6 +203,8 @@ class SentimentCNN(SentimentAnalysisModel):
 
         if self.model_save_path and self.saver:
             self.save()
+
+        return loss, accuracy
 
     def save(self):
         if self.model_save_path and self.saver:
