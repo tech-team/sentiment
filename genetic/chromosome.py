@@ -54,9 +54,9 @@ class Chromosome:
         parents = [ch1, ch2]
         new_config = {}
 
-        for key in ch1.keys():
+        for key in ch1.config.keys():
             parent_id = random.randint(0, 1)
-            new_config[key] = parents[parent_id][key]
+            new_config[key] = parents[parent_id].config[key]
 
         ch = Chromosome(new_config, ch1.base_config)
         return ch

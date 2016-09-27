@@ -17,8 +17,8 @@ def main():
         dict(
             steps=2,
             mutation_prob=0.1,
-            population_size=10,
-            crossovers_count=6
+            population_size=4,
+            crossovers_count=2
         ),
         cnn_base_config=cnn_base_config,
         datasets=datasets
