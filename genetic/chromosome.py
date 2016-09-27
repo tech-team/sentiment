@@ -7,16 +7,18 @@ from sentiment.cnn import SentimentCNN
 class Chromosome:
     def __init__(self, config, base_config):
         self.config = config  # genome
-        self.base_config = base_config
+        self.base_config = base_config  # const ref
         self.fitness = None
+
+        # just for output:
+        self.loss = None
+        self.accuracy = None
 
     @staticmethod
     def create_random(base_config):
         config = copy.deepcopy(base_config)
 
         # modify copy of base config
-        random.randint(1, 10)
-
         config['filter_sizes'] = [
             random.randint(2, 6),
             random.randint(2, 6),
@@ -24,7 +26,7 @@ class Chromosome:
         ]
         config['dropout_keep_prob'] = random.random()
         config['l2_lambda'] = random.random()
-        config['n_filters'] = random.randint(10, 500),
+        config['n_filters'] = random.randint(10, 500)
         config['batch_size'] = random.randint(10, 500)
         config['learning_rate'] = random.random()
 
@@ -67,9 +69,11 @@ class Chromosome:
                     **self.config
                 )
 
-                loss, accuracy = cnn.train(**datasets)
+                loss, accuracy = cnn.train(*datasets)
                 self.update_fitness(loss, accuracy)
 
     def update_fitness(self, loss, accuracy):
         self.fitness = accuracy
+        self.loss = loss
+        self.accuracy = accuracy
         return self.fitness

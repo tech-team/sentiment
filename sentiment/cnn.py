@@ -161,7 +161,7 @@ class SentimentCNN(SentimentAnalysisModel):
 
         writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 
-        tf.initialize_all_variables().run()
+        tf.initialize_all_variables().run(session=self.session)
 
         loss, accuracy = 0, 0
         for step in range(self.n_steps + 1):
