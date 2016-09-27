@@ -28,13 +28,14 @@ class Genetic:
             self.population.append(Chromosome.create_random(self.cnn_base_config))
 
     def step(self):
-        print('-----Step began: {}-----'.format(self.step_id + 1))
+        print('[Step {}]-----Step began-----'.format(self.step_id + 1))
         for i, ch in enumerate(self.population):
             if ch.fitness is None:
-                print('-----Evaluating: {}/{}-----'.format(i + 1, len(self.population)))
+                print('[Step {}]-----Evaluating: {}/{}-----'.format(
+                    self.step_id + 1, i + 1, len(self.population)))
                 ch.evaluate(self.datasets)
 
-        print('-----Evaluating finished-----')
+        print('[Step {}]-----Evaluating finished-----')
 
         self.population.sort(key=lambda ch: -ch.fitness)
 
@@ -63,7 +64,7 @@ class Genetic:
         self.population = children + self.population[:best_parents_limit]
 
     def print_best_config(self):
-        print('-----Step results: {}-----'.format(self.step_id + 1))
+        print('[Step {}]-----Step results-----'.format(self.step_id + 1))
         ch = self.population[0]
         pprint(ch.config)
         print('Loss: {}'.format(ch.loss))

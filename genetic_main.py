@@ -15,10 +15,10 @@ def main():
 
     genetic = Genetic(
         dict(
-            steps=2,
+            steps=20,
             mutation_prob=0.1,
-            population_size=4,
-            crossovers_count=2
+            population_size=10,
+            crossovers_count=8
         ),
         cnn_base_config=cnn_base_config,
         datasets=datasets

@@ -47,7 +47,7 @@ class Chromosome:
             # could be better to average between old and new value
             # but I'm too lazy for that
             # (note, that some params are ints, some - floats and some are even lists)
-            self.config = random_source.config[key]
+            self.config[key] = random_source.config[key]
 
     @staticmethod
     def crossover(ch1, ch2):
