@@ -11,6 +11,8 @@ from sentiment.w2v_model import Word2VecModel
 class SentimentCNN(SentimentAnalysisModel):
     MODEL_FILE_NAME = 'sentiment_model.ckpt'
 
+    WRITE_SUMMARY = False
+
     def __init__(self,
                  session,
                  embeddings_model_path,
@@ -159,7 +161,8 @@ class SentimentCNN(SentimentAnalysisModel):
         tf_train_accuracy_summary = tf.scalar_summary('train_accuracy', self._accuracy)
         tf_valid_accuracy_summary = tf.scalar_summary('valid_accuracy', self._accuracy)
 
-        writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
+        if self.WRITE_SUMMARY:
+            writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 
         tf.initialize_all_variables().run(session=self.session)
 
@@ -179,8 +182,9 @@ class SentimentCNN(SentimentAnalysisModel):
                 feed_dict=feed_dict
             )
 
-            writer.add_summary(loss_summary, step)
-            writer.add_summary(accuracy_summary, step)
+            if writer:
+                writer.add_summary(loss_summary, step)
+                writer.add_summary(accuracy_summary, step)
             print("{}: step {}, loss {:g}, accuracy {:g}".format(datetime.datetime.now().isoformat(),
                                                                  step, loss, accuracy))
             if step % self.check_steps == 0:
@@ -194,8 +198,10 @@ class SentimentCNN(SentimentAnalysisModel):
                         [self._loss, self._accuracy, tf_valid_loss_summary, tf_valid_accuracy_summary],
                         feed_dict=feed_dict
                     )
-                    writer.add_summary(loss_summary, step)
-                    writer.add_summary(accuracy_summary, step)
+
+                    if writer:
+                        writer.add_summary(loss_summary, step)
+                        writer.add_summary(accuracy_summary, step)
                     print()
                     print("VALIDATION: {}: step {}, loss {:g}, accuracy {:g}".format(datetime.datetime.now().isoformat(),
                                                                                      step, loss, accuracy))
