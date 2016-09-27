@@ -161,6 +161,7 @@ class SentimentCNN(SentimentAnalysisModel):
         tf_train_accuracy_summary = tf.scalar_summary('train_accuracy', self._accuracy)
         tf_valid_accuracy_summary = tf.scalar_summary('valid_accuracy', self._accuracy)
 
+        writer = None
         if self.WRITE_SUMMARY:
             writer = tf.train.SummaryWriter(self.summary_path, self.session.graph)
 

@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import random
 
 from genetic.chromosome import Chromosome
@@ -26,8 +28,10 @@ class Genetic:
             self.population.append(Chromosome.create_random(self.cnn_base_config))
 
     def step(self):
-        for ch in self.population:
+        print('-----Step began: {}-----'.format(self.step_id))
+        for i, ch in enumerate(self.population):
             if ch.fitness is None:
+                print('Evaluating: {}/{}'.format(i + 1, len(self.population)))
                 ch.evaluate(self.datasets)
 
         self.population.sort(key=lambda ch: -ch.fitness)
@@ -56,12 +60,12 @@ class Genetic:
         self.population = children + self.population[:best_parents_limit]
 
     def print_best_config(self):
-        print('-----Step {}-----'.format(self.step_id))
+        print('-----Step results: {}-----'.format(self.step_id))
         ch = self.population[0]
         pprint(ch.config)
         print('Loss: {}'.format(ch.loss))
         print('Accuracy: {}'.format(ch.accuracy))
-        print('-----------------')
+        print('--------------------------')
 
     def _random_exp_parent(self):
         parent_id = random.expovariate(lambd=1.0)
