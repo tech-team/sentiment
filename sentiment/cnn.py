@@ -11,7 +11,7 @@ from sentiment.w2v_model import Word2VecModel
 class SentimentCNN(SentimentAnalysisModel):
     MODEL_FILE_NAME = 'sentiment_model.ckpt'
 
-    WRITE_SUMMARY = False
+    WRITE_SUMMARY = True
 
     def __init__(self,
                  session,

@@ -1,17 +1,17 @@
 cnn:
-    embeddings_model_path: './preprocess/sql_utils/trained/model.ckpt-27138193'
-    embeddings_vocab_path: './preprocess/sql_utils/trained/vocab.txt'
+    embeddings_model_path: './tf10_w2v/model.ckpt-23568817'
+    embeddings_vocab_path: './tf10_w2v/vocab.txt'
     model_save_path: './cnn_saved/'
     embeddings_size: 200
     sentence_length: 30
     n_labels: 2
-    filter_sizes: [3, 4, 5]
-    dropout_keep_prob: 0.4
+    filter_sizes: [5, 2, 4]
+    dropout_keep_prob: 0.7
     l2_lambda: 0.1
-    n_filters: 128
-    n_steps: 2
-    batch_size: 256
-    learning_rate: 0.002
+    n_filters: 175
+    n_steps: 2000
+    batch_size: 373
+    learning_rate: 0.029
     validation_check_steps: 100
     summary_path: './summary'
 

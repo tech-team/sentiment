@@ -14,7 +14,11 @@ class Word2VecModel:
         self._word2id = {}
         with open(vocab_file, 'r') as vocab_file:
             for i, line in enumerate(vocab_file):
-                word, _ = line.split(' ')
+                word, _ = line.split(' ')  # bytes in str
+                word = eval(word)  # bytes
+                word = word.decode('utf8')  # actual str
+
+
                 self._word2id[word] = i
 
         vocab_size = len(self._word2id)
