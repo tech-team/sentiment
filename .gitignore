@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+cnn_saved/
 
 # C extensions
 *.so
